@@ -1,0 +1,81 @@
+{{- if and .Values.ingress.enabled (eq .Values.ingress.className "kong") -}}
+{{- $fullName := include "progenitor.fullname" . -}}
+{{- $ingressName := .Values.ingress.name | default $fullName -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $ingressName }}
+  labels:
+    {{- include "progenitor.labels" . | nindent 4 }}
+    {{- with .Values.ingress.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- end }}
+    {{- with .Values.ingress.kongAnnotations }}
+    {{- if hasKey . "stripPath" }}
+    konghq.com/strip-path: {{ .stripPath | quote }}
+    {{- end }}
+    {{- if hasKey . "preserveHost" }}
+    konghq.com/preserve-host: {{ .preserveHost | quote }}
+    {{- end }}
+    {{- if hasKey . "httpsRedirectStatusCode" }}
+    konghq.com/https-redirect-status-code: {{ .httpsRedirectStatusCode | quote }}
+    {{- end }}
+    {{- if hasKey . "protocols" }}
+    konghq.com/protocols: {{ .protocols | quote }}
+    {{- end }}
+    {{- if hasKey . "methods" }}
+    konghq.com/methods: {{ .methods | quote }}
+    {{- end }}
+    {{- with .custom }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.ingress.acl.enabled }}
+    {{- if .Values.ingress.basicAuth.enabled }}
+    konghq.com/plugins: {{ $ingressName }}-ip-restriction,{{ $ingressName }}-basic-auth
+    {{- else }}
+    konghq.com/plugins: {{ $ingressName }}-ip-restriction
+    {{- end }}
+    {{- else }}
+    {{- if .Values.ingress.basicAuth.enabled }}
+    konghq.com/plugins: {{ $ingressName }}-basic-auth
+    {{- end }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - secretName: {{ .Values.ingress.tls.secretName }}
+      {{- if .Values.ingress.tls.hosts }}
+      hosts:
+        {{- range .Values.ingress.tls.hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.rules }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ .service.name | default $fullName }}
+                port:
+                  {{- if kindIs "string" .service.port }}
+                  name: {{ .service.port }}
+                  {{- else }}
+                  number: {{ .service.port }}
+                  {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

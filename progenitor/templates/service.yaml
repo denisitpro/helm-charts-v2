@@ -1,0 +1,31 @@
+{{- if and .Values.service.ports (or .Values.service.enabled .Values.service.noSelector) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "progenitor.fullname" . }}
+  labels:
+    {{- include "progenitor.labels" . | nindent 4 }}
+    {{- if .Values.metrics.enabled }}
+    {{- with .Values.metrics.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- end }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- tpl (toYaml .) $ | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- if .Values.service.clusterIP }}
+  clusterIP: {{ .Values.service.clusterIP }}
+  {{- end }}
+  {{- if .Values.service.publishNotReadyAddresses }}
+  publishNotReadyAddresses: {{ .Values.service.publishNotReadyAddresses }}
+  {{- end }}
+  ports:
+    {{- toYaml .Values.service.ports | nindent 4 }}
+  {{- if not .Values.service.noSelector }}
+  selector:
+    {{- include "progenitor.selectorLabels" . | nindent 4 }}
+  {{- end }}
+{{- end }}

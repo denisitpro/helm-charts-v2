@@ -1,0 +1,65 @@
+name: publish pg-flyway-migrate
+
+on:
+  push:
+    paths:
+      - pg-flyway-migrate/Chart.yaml
+
+jobs:
+  publish:
+    container:
+      image: denisitpro/net-tools:latest
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        pg_flyway_migrate_folder: ['pg-flyway-migrate']
+
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract chart version
+        id: vars
+        run: |
+          cd pg-flyway-migrate
+          echo "CHART_VERSION=$(yq e '.version' Chart.yaml)" >> $GITHUB_ENV
+          echo "FLYWAY_VERSION=$(yq e '.flywayImage' version.txt)" >> $GITHUB_ENV
+          echo "POSTGRESQL_VERSION=$(yq e '.postgresql' version.txt)" >> $GITHUB_ENV
+          echo "GIT_VERSION=$(yq e '.gitImage' version.txt)" >> $GITHUB_ENV
+          echo "TIMESTAMP=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+
+      - name: Set app version into Chart.yaml
+        run: |
+          yq e -i ".appVersion = \"${FLYWAY_VERSION}\"" ${{ matrix.pg_flyway_migrate_folder }}/Chart.yaml
+          cat ${{ matrix.pg_flyway_migrate_folder }}/Chart.yaml
+
+      - name: Set app versions in values.yaml
+        run: |
+          yq e -i ".flywayImage.tag = \"${FLYWAY_VERSION}\"" ${{ matrix.pg_flyway_migrate_folder }}/values.yaml
+          yq e -i ".postgresql.tag = \"${POSTGRESQL_VERSION}\"" ${{ matrix.pg_flyway_migrate_folder }}/values.yaml
+          yq e -i ".gitImage.tag = \"${GIT_VERSION}\"" ${{ matrix.pg_flyway_migrate_folder }}/values.yaml
+          cat ${{ matrix.pg_flyway_migrate_folder }}/values.yaml
+
+      - name: Package Helm chart
+        run: |
+          helm package ${{ matrix.pg_flyway_migrate_folder }} --destination .
+
+
+      - name: Login to Helm OCI registry
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin registry-1.docker.io
+
+      - name: Push Helm chart to OCI
+        run: |
+          helm push pg-flyway-migrate-${CHART_VERSION}.tgz oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "pg-flyway-migrate-${{ env.CHART_VERSION }}"
+          name: "pg-flyway-migrate ${{ env.CHART_VERSION }}"
+          files: "pg-flyway-migrate-${{ env.CHART_VERSION }}.tgz"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: progenitor
+description: Universal Helm chart for deploying containerized applications
+type: application
+version: 4.0.1

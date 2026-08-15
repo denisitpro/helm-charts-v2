@@ -1,0 +1,232 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "progenitor.fullname" . }}
+  labels:
+    {{- include "progenitor.labels" . | nindent 4 }}
+    {{- with .Values.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "progenitor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "progenitor.selectorLabels" . | nindent 8 }}
+        {{- with .Values.extraLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if or .Values.configMaps.files.enabled .Values.volumes }}
+      volumes:
+        {{- if .Values.configMaps.files.enabled }}
+        {{- range .Values.configMaps.files.resources }}
+        - name: {{ .name }}
+          configMap:
+            name: {{ .name }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- with .Values.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.initContainers }}
+      initContainers:
+      {{- range .Values.initContainers }}
+        - name: {{ .name }}
+          {{- if .image }}
+            {{- $img := .image }}
+            {{- $hasDigest := contains "@" $img }}
+            {{- $lastPart := "" }}
+            {{- if contains "/" $img }}
+              {{- $parts := splitList "/" $img }}
+              {{- $lastPart = index $parts (sub (len $parts) 1) }}
+            {{- else }}
+              {{- $lastPart = $img }}
+            {{- end }}
+            {{- $hasTag := or $hasDigest (contains ":" $lastPart) }}
+            {{- if $hasTag }}
+          {{- /* Full image path with tag or digest specified */}}
+          image: {{ .image | quote }}
+            {{- else }}
+          {{- /* Image name without tag - use main container tag */}}
+          image: "{{ .image }}:{{ $.Values.image.tag }}"
+            {{- end }}
+          {{- else }}
+          {{- /* No image specified - use main container image */}}
+          image: "{{ $.Values.image.registry }}/{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          {{- end }}
+          {{- with .imagePullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
+          {{- with .command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ .Values.containerName | default (include "progenitor.name" .) }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if or .Values.configMaps.files.enabled .Values.volumeMounts }}
+          volumeMounts:
+            {{- if .Values.configMaps.files.enabled }}
+            {{- range .Values.configMaps.files.resources }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
+            {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- if or .Values.secrets.enabled .Values.configMaps.env.enabled .Values.envFrom }}
+          envFrom:
+            {{- if .Values.configMaps.env.enabled }}
+            - configMapRef:
+                name: {{ include "progenitor.configMapEnvName" . }}
+            {{- end }}
+            {{- if .Values.secrets.enabled }}
+            {{- range .Values.secrets.vaultSecrets }}
+            - secretRef:
+                name: {{ .secretName }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.envFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- if or .Values.env .Values.envRaw }}
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- with .Values.envRaw }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.containerPorts }}
+          ports:
+            {{- toYaml .Values.containerPorts | nindent 12 }}
+          {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            {{- if .Values.livenessProbe.custom }}
+            {{- toYaml .Values.livenessProbe.custom | nindent 12 }}
+            {{- else if .Values.livenessProbe.httpGet }}
+            httpGet:
+              path: {{ .Values.livenessProbe.httpGet.path }}
+              port: {{ .Values.livenessProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            {{- else if .Values.containerPorts }}
+            tcpSocket:
+              port: {{ (index .Values.containerPorts 0).name }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds | default 30 }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds | default 10 }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            {{- if .Values.readinessProbe.custom }}
+            {{- toYaml .Values.readinessProbe.custom | nindent 12 }}
+            {{- else if .Values.readinessProbe.httpGet }}
+            httpGet:
+              path: {{ .Values.readinessProbe.httpGet.path }}
+              port: {{ .Values.readinessProbe.httpGet.port }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            {{- else if .Values.containerPorts }}
+            tcpSocket:
+              port: {{ (index .Values.containerPorts 0).name }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds | default 10 }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds | default 10 }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if ne .Values.enableServiceLinks nil }}
+      enableServiceLinks: {{ .Values.enableServiceLinks }}
+      {{- end }}

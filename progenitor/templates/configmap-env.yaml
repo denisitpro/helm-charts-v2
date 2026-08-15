@@ -1,0 +1,16 @@
+{{- if .Values.configMaps.env.enabled -}}
+{{- $envData := .Values.configMaps.env.data | default dict -}}
+{{- if $envData }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "progenitor.configMapEnvName" . }}
+  labels:
+    {{- include "progenitor.labels" . | nindent 4 }}
+data:
+{{- range $key, $value := $envData }}
+  {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+

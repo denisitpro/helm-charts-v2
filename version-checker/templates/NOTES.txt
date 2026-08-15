@@ -1,0 +1,10 @@
+CronJob {{ include "common.names.name" . }} has been created.
+
+To list upcoming schedules:
+  kubectl get cronjob {{ include "common.names.name" . }} -n {{ .Release.Namespace }} -o json | jq -r .spec.schedule
+
+To check the latest job status:
+  kubectl get jobs --selector=job-name={{ include "common.names.name" . }} -n {{ .Release.Namespace }}
+
+To check logs of the last run:
+  kubectl logs job/$(kubectl get jobs -n {{ .Release.Namespace }} --sort-by=.metadata.creationTimestamp -o jsonpath="{.items[-1:].metadata.name}")

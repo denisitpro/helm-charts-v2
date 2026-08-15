@@ -1,0 +1,195 @@
+{{- if .Values.cronjobs.enabled }}
+{{- range .Values.cronjobs.resources }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "progenitor.fullname" $ }}-{{ .name }}
+  labels:
+    {{- include "progenitor.labels" $ | nindent 4 }}
+    cronjob-name: {{ .name }}
+    {{- with .labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  schedule: {{ .schedule | quote }}
+  {{- if .timeZone }}
+  timeZone: {{ .timeZone }}
+  {{- end }}
+  {{- if .suspend }}
+  suspend: {{ .suspend }}
+  {{- end }}
+  {{- if .concurrencyPolicy }}
+  concurrencyPolicy: {{ .concurrencyPolicy }}
+  {{- end }}
+  {{- if .successfulJobsHistoryLimit }}
+  successfulJobsHistoryLimit: {{ .successfulJobsHistoryLimit }}
+  {{- else }}
+  successfulJobsHistoryLimit: 3
+  {{- end }}
+  {{- if .failedJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .failedJobsHistoryLimit }}
+  {{- else }}
+  failedJobsHistoryLimit: 1
+  {{- end }}
+  {{- if .startingDeadlineSeconds }}
+  startingDeadlineSeconds: {{ .startingDeadlineSeconds }}
+  {{- end }}
+  jobTemplate:
+    metadata:
+      {{- with .jobAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "progenitor.selectorLabels" $ | nindent 8 }}
+        cronjob-name: {{ .name }}
+        {{- with .jobLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if .ttlSecondsAfterFinished }}
+      ttlSecondsAfterFinished: {{ .ttlSecondsAfterFinished }}
+      {{- end }}
+      backoffLimit: {{ .backoffLimit | default 2 }}
+      {{- if .activeDeadlineSeconds }}
+      activeDeadlineSeconds: {{ .activeDeadlineSeconds }}
+      {{- end }}
+      template:
+        metadata:
+          {{- with .podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          labels:
+            {{- include "progenitor.selectorLabels" $ | nindent 12 }}
+            cronjob-name: {{ .name }}
+            {{- with .podLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        spec:
+          restartPolicy: {{ .restartPolicy | default "OnFailure" }}
+          {{- if or $.Values.configMaps.files.enabled .volumes }}
+          volumes:
+            {{- if $.Values.configMaps.files.enabled }}
+            {{- range $.Values.configMaps.files.resources }}
+            - name: {{ .name }}
+              configMap:
+                name: {{ .name }}
+            {{- end }}
+            {{- end }}
+            {{- with .volumes }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- with $.Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ .serviceAccountName | default $.Values.serviceAccountName }}
+          {{- with .podSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: {{ .name }}
+              {{- with .securityContext }}
+              securityContext:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- if .image }}
+                {{- $img := .image }}
+                {{- $hasDigest := contains "@" $img }}
+                {{- $lastPart := "" }}
+                {{- if contains "/" $img }}
+                  {{- $parts := splitList "/" $img }}
+                  {{- $lastPart = index $parts (sub (len $parts) 1) }}
+                {{- else }}
+                  {{- $lastPart = $img }}
+                {{- end }}
+                {{- $hasTag := or $hasDigest (contains ":" $lastPart) }}
+                {{- if $hasTag }}
+              {{- /* Full image path with tag or digest specified */}}
+              image: {{ .image | quote }}
+                {{- else }}
+              {{- /* Image name without tag - use main container tag */}}
+              image: "{{ .image }}:{{ $.Values.image.tag }}"
+                {{- end }}
+              {{- else }}
+              {{- /* No image specified - use main container image */}}
+              image: "{{ $.Values.image.registry }}/{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+              {{- end }}
+              imagePullPolicy: {{ .imagePullPolicy | default $.Values.image.pullPolicy }}
+              {{- with .command }}
+              command:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with .args }}
+              args:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- if or $.Values.configMaps.files.enabled .volumeMounts }}
+              volumeMounts:
+                {{- if $.Values.configMaps.files.enabled }}
+                {{- range $.Values.configMaps.files.resources }}
+                - name: {{ .name }}
+                  mountPath: {{ .mountPath }}
+                  readOnly: true
+                {{- end }}
+                {{- end }}
+                {{- with .volumeMounts }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              {{- end }}
+              {{- if or $.Values.secrets.enabled $.Values.configMaps.env.enabled .envFrom }}
+              envFrom:
+                {{- if $.Values.configMaps.env.enabled }}
+                - configMapRef:
+                    name: {{ include "progenitor.configMapEnvName" $ }}
+                {{- end }}
+                {{- if $.Values.secrets.enabled }}
+                {{- range $.Values.secrets.vaultSecrets }}
+                - secretRef:
+                    name: {{ .secretName }}
+                {{- end }}
+                {{- end }}
+                {{- with .envFrom }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              {{- end }}
+              {{- if or .env $.Values.env .envRaw }}
+              env:
+                {{- range $key, $value := $.Values.env }}
+                - name: {{ $key }}
+                  value: {{ $value | quote }}
+                {{- end }}
+                {{- range $key, $value := .env }}
+                - name: {{ $key }}
+                  value: {{ $value | quote }}
+                {{- end }}
+                {{- with .envRaw }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              {{- end }}
+              {{- with .resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+          {{- with .nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
+{{- end }}

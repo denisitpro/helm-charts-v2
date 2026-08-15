@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.nameOverride | default (printf "%s-migrate-job" .Release.Name) }}
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels:
+    {{- include "pg-flyway-migrate.labels" . | nindent 4 }}
+spec:
+  ttlSecondsAfterFinished: {{ .Values.migrations.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "pg-flyway-migrate.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: default
+      initContainers:
+        - name: ensure-db
+          image: "{{ .Values.postgresql.registry }}/{{ .Values.postgresql.repository }}:{{ .Values.postgresql.tag }}"
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - |
+              psql -h {{ .Values.db.host }} -p {{ .Values.db.port }} -U {{ .Values.db.user }} -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='{{ .Values.db.dbName}}'" | grep -q 1 || \
+              createdb -h {{ .Values.db.host }} -p {{ .Values.db.port }} -U {{ .Values.db.user }} {{ .Values.db.dbName}}
+          env:
+            - name: PGPASSWORD
+              value: "{{ .Values.db.password }}"
+        - name: clone-migrations
+          image: "{{ .Values.gitImage.registry }}/{{ .Values.gitImage.repository }}:{{ .Values.gitImage.tag }}"
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - |
+              mkdir /tmp/clone
+              git clone --branch {{ .Values.migrations.git.ref }} https://{{ .Values.migrations.git.username }}:${GIT_TOKEN}@{{ .Values.migrations.git.host }}{{ .Values.migrations.git.repository }} /tmp/clone
+              ls -la /tmp/clone
+              REPO_NAME=$(basename -s .git $(git config --get remote.origin.url));
+              cp -r /tmp/clone/${REPO_NAME}/{{ .Values.migrations.migration_path }} /flyway/sql/migrations                            
+              ls -la /flyway/sql/migrations
+               ls -la /flyway/sql/migrations/{{ .Values.migrations.migration_path }}
+          env:
+            - name: GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: git-readonly-user-token-secret
+                  key: token
+          volumeMounts:
+            - name: migration-volume
+              mountPath: /flyway/sql/migrations
+
+      containers:
+        - name: flyway
+          image: "{{ .Values.flywayImage.registry }}/{{ .Values.flywayImage.repository }}:{{ .Values.flywayImage.tag }}"
+          command: [ "flyway" ]
+          args:
+            - -url=jdbc:postgresql://{{ .Values.db.host }}:{{ .Values.db.port }}/{{ .Values.db.dbName }}?user={{ .Values.db.user }}&password={{ .Values.db.password }}
+            - -locations=filesystem:/flyway/sql/migrations
+            - migrate
+          volumeMounts:
+            - name: migration-volume
+              mountPath: /flyway/sql/migrations
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: migration-volume
+          emptyDir: {}

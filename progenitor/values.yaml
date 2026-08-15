@@ -1,0 +1,698 @@
+# Default values for universal application chart
+replicaCount: 1
+
+# Name overrides
+nameOverride: ""
+fullnameOverride: ""
+
+# Extra labels to add to all resources and pods
+extraLabels: {}
+  # team: backend
+  # environment: production
+
+# Pod annotations
+podAnnotations: {}
+  # prometheus.io/scrape: "true"
+  # prometheus.io/port: "3000"
+
+# Service account
+serviceAccountName: default
+
+# Container name (defaults to chart name if not set)
+containerName: ""
+
+# Environment variables (as key-value ConfigMap)
+env: {}
+  # KEY: "value"
+  # ANOTHER_KEY: "value"
+
+# Raw environment variables (for valueFrom, configMapKeyRef, secretKeyRef, etc.)
+envRaw: []
+  # - name: POD_IP
+  #   valueFrom:
+  #     fieldRef:
+  #       fieldPath: status.podIP
+  # - name: DB_PASSWORD
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: db-secret
+  #       key: password
+
+# Additional envFrom entries (for multiple ConfigMaps/Secrets)
+envFrom: []
+  # - configMapRef:
+  #     name: extra-config
+  # - secretRef:
+  #     name: extra-secrets
+
+# ConfigMap configuration
+configMaps:
+  # ConfigMap for environment variables (loaded via envFrom)
+  env:
+    enabled: false
+    # Key-value pairs for environment variables
+    data: {}
+      # DATABASE_HOST: "postgres.default.svc.cluster.local"
+      # DATABASE_PORT: "5432"
+      # REDIS_HOST: "redis.default.svc.cluster.local"
+      # APP_ENV: "production"
+  
+  # ConfigMap for configuration files (mounted as volume)
+  # Supports multiple ConfigMaps with different mount paths
+  files:
+    enabled: false
+    # List of ConfigMap resources to create
+    # Each resource can have the following fields:
+    #   - name: (required) Name of the ConfigMap resource
+    #   - mountPath: (required) Mount path for this ConfigMap
+    #   - labels: (optional) Additional labels for the ConfigMap
+    #   - data: (required) Configuration files content (key: file content)
+    resources: []
+    # Examples:
+    #   - name: app-config
+    #     mountPath: /etc/app
+    #     data:
+    #       config.json: |
+    #         {
+    #           "server": {
+    #             "port": 3000,
+    #             "host": "0.0.0.0"
+    #           },
+    #           "logging": {
+    #             "level": "info"
+    #           }
+    #         }
+    #       settings.yml: |
+    #         environment: production
+    #         debug: false
+    #   - name: nginx-config
+    #     mountPath: /etc/nginx/conf.d
+    #     data:
+    #       default.conf: |
+    #         server {
+    #           listen 8080;
+    #           location / {
+    #             proxy_pass http://backend:3000;
+    #           }
+    #         }
+    #   - name: scripts
+    #     mountPath: /opt/scripts
+    #     data:
+    #       startup.sh: |
+    #         #!/bin/bash
+    #         echo "Starting application..."
+    #         exec /app/bin/server
+
+# Secrets configuration (for envFrom in deployment)
+secrets:
+  enabled: false
+  # vaultSecrets:
+  #   - secretName: app-secrets
+
+# VaultStaticSecret configuration (creates VaultStaticSecret CRs)
+vaultStaticSecrets:
+  enabled: false
+  # Default values for all secrets (can be overridden per secret)
+  defaultMount: secret
+  defaultType: kv-v2
+  # defaultVaultAuthRef: vault-auth
+  # labels: {}
+  # annotations: {}
+  #   # ArgoCD sync-wave example (create secrets before other resources)
+  #   argocd.argoproj.io/sync-wave: "-5"
+  
+  # List of VaultStaticSecrets to create
+  secrets: []
+    # - secretName: app-database-credentials
+    #   path: dev1/myapp/database
+    #   mount: secret  # optional, uses defaultMount if not specified
+    #   type: kv-v2    # optional, uses defaultType if not specified
+    #   hmacSecretData: true  # optional, defaults to true
+    #   refreshAfter: 30s  # optional
+    #   vaultAuthRef: custom-vault-auth  # optional, uses defaultVaultAuthRef if not specified
+    #   includeKeys:   # optional, include only specific keys
+    #     - DB_HOST
+    #     - DB_PASSWORD
+    #   # excludeKeys:  # optional, exclude specific keys
+    #   #   - UNUSED_KEY
+    #   # templates:  # optional, for advanced transformations
+    #   #   mykey:
+    #   #     text: "{{ get .Secrets \"sourcekey\" }}"
+    #   destination:   # optional
+    #     create: true            # required true to set a custom type
+    #     # type: kubernetes.io/basic-auth  # optional; Secret type, defaults to Opaque (e.g. for CloudNativePG basic-auth)
+    #     overwrite: true
+    #     name: app-database-credentials  # defaults to secretName
+    #     # labels: {}
+    #     # annotations: {}
+    #   # rolloutRestartTargets:  # optional, auto-restart on secret changes
+    #   #   - kind: Deployment
+    #   #     name: myapp
+
+# Image configuration
+image:
+  registry: docker.io
+  repository: company/progenitor
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+  # - name: registry-credentials
+
+# Container command override
+command: []
+  # - "/bin/sh"
+  # - "-c"
+
+# Container args override
+args: []
+  # - "npm start"
+
+# Init containers - run before main container starts
+# Useful for migrations, waiting for dependencies, setup tasks
+#
+# Image handling supports three modes:
+# 1. No image field - uses main container image (registry/repository:tag)
+# 2. Image without tag (e.g., "busybox") - appends main container tag
+# 3. Full image with tag (e.g., "busybox:1.35") - uses as-is
+initContainers: []
+  # Example 1: Use main container image with same version (for migrations)
+  # - name: migration
+  #   # No image field - will use main container image
+  #   command: ["./migrate.sh"]
+  #   env:
+  #     - name: DATABASE_URL
+  #       value: "postgres://example.com:5432/mydb"
+  #
+  # Example 2: Use custom image with specific tag
+  # - name: wait-for-db
+  #   image: busybox:1.35
+  #   command: ['sh', '-c', 'until nc -z postgres 5432; do sleep 2; done']
+  #
+  # Example 3: Use custom image with main container tag
+  # - name: custom-init
+  #   image: docker.io/mycompany/init-tool
+  #   # Will append main container tag, e.g., init-tool:v1.5.2
+  #   command: ["./init.sh"]
+
+# Container ports
+containerPorts:
+  - name: http
+    containerPort: 3000
+    protocol: TCP
+
+# Volumes
+volumes: []
+  # - name: config-volume
+  #   configMap:
+  #     name: my-config
+  # - name: secret-volume
+  #   secret:
+  #     secretName: my-secret
+  # - name: cache
+  #   emptyDir: {}
+
+# Volume mounts
+volumeMounts: []
+  # - name: config-volume
+  #   mountPath: /etc/config
+  # - name: secret-volume
+  #   mountPath: /etc/secrets
+  #   readOnly: true
+  # - name: cache
+  #   mountPath: /tmp/cache
+
+# Resource limits and requests
+resources:
+  requests:
+    cpu: "50m"
+    memory: "50Mi"
+  limits:
+    cpu: "2"
+    memory: "2048Mi"
+
+# Deployment strategy
+strategy: {}
+  # type: RollingUpdate
+  # rollingUpdate:
+  #   maxSurge: 1
+  #   maxUnavailable: 0
+
+# Pod security context
+podSecurityContext: {}
+  # fsGroup: 2000
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+# Container security context
+securityContext: {}
+  # allowPrivilegeEscalation: false
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+# Termination grace period in seconds
+terminationGracePeriodSeconds: 30
+
+# Host aliases - add entries to /etc/hosts in container
+# Useful for applications that hardcode domain names or need DNS overrides
+hostAliases: []
+  # - ip: "1.2.3.4"
+  #   hostnames:
+  #     - "example.com"
+  #     - "www.example.com"
+  # - ip: "5.6.7.8"
+  #   hostnames:
+  #     - "api.example.com"
+  #     - "old-backend.internal.com"
+
+# Service configuration
+service:
+  enabled: true
+  type: ClusterIP
+  # annotations: {}
+  # clusterIP: ""
+  # publishNotReadyAddresses: false
+  # noSelector: false
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP
+
+# External services configuration (creates multiple services with {fullname}-{name}-external naming)
+# Used for external integrations, ExternalName services, or services with manual endpoints
+servicesExternal:
+  enabled: false
+  # List of external service resources to create
+  resources: []
+    # - name: database  # REQUIRED - used for service naming: {fullname}-{name}-external
+    #   type: ExternalName
+    #   externalName: "postgres.external.example.com"
+    #   ports:
+    #     - name: postgresql
+    #       port: 5432
+    #       protocol: TCP
+    #   # annotations: {}  # Support template variables via tpl
+    #   # labels: {}
+    # 
+    # - name: api
+    #   type: ClusterIP
+    #   noSelector: true
+    #   ports:
+    #     - name: http
+    #       port: 3000
+    #       protocol: TCP
+    #   endpoints:
+    #     enabled: true
+    #     subsets:
+    #       - addresses:
+    #           - ip: "10.0.1.10"
+    #             # hostname: "backend-1"  # optional
+    #           - ip: "10.0.1.11"
+    #         ports:
+    #           - name: http
+    #             port: 3000
+    #             protocol: TCP
+    # 
+    # - name: cache
+    #   type: ClusterIP
+    #   externalIPs:
+    #     - "203.0.113.10"
+    #   ports:
+    #     - name: redis
+    #       port: 6379
+    #       protocol: TCP
+
+# Health checks
+# If httpGet is not specified but probe is enabled, will default to tcpSocket on first containerPort
+livenessProbe:
+  enabled: false
+  # httpGet:
+  #   path: /health
+  #   port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  # For custom probe configuration (exec, grpc, etc.), use 'custom':
+  # custom:
+  #   exec:
+  #     command:
+  #       - cat
+  #       - /tmp/healthy
+
+readinessProbe:
+  enabled: false
+  # httpGet:
+  #   path: /ready
+  #   port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  # For custom probe configuration, use 'custom':
+  # custom:
+  #   exec:
+  #     command:
+  #       - cat
+  #       - /tmp/ready
+
+# Pod scheduling
+nodeSelector: {}
+  # disktype: ssd
+  # kubernetes.io/hostname: node-1
+
+affinity: {}
+  # podAntiAffinity:
+  #   preferredDuringSchedulingIgnoredDuringExecution:
+  #     - weight: 100
+  #       podAffinityTerm:
+  #         labelSelector:
+  #           matchExpressions:
+  #             - key: app.kubernetes.io/name
+  #               operator: In
+  #               values:
+  #                 - myapp
+  #         topologyKey: kubernetes.io/hostname
+
+tolerations: []
+  # - key: "node.kubernetes.io/unreachable"
+  #   operator: "Exists"
+  #   effect: "NoExecute"
+  #   tolerationSeconds: 30
+
+# Enable/disable service links in pod (can reduce env vars in large clusters)
+enableServiceLinks: true
+
+# Autoscaling configuration (if enabled, replicas from deployment will be ignored)
+autoscaling:
+  enabled: false
+  # minReplicas: 1
+  # maxReplicas: 10
+  # targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# Metrics configuration (Prometheus integration)
+metrics:
+  enabled: false
+  # labels:
+  #   prometheus.io/scrape: "true"
+  #   prometheus.io/port: "3000"
+  #   prometheus.io/path: "/metrics"
+
+# Ingress configuration (supports both Nginx and Kong)
+ingress:
+  enabled: false
+  # Ingress class name (nginx or kong)
+  className: nginx
+  # Ingress resource name (defaults to fullname if not specified)
+  name: ""
+  # Additional labels for the Ingress resource
+  labels: {}
+  # Additional annotations
+  annotations: {}
+  
+  # Nginx-specific annotations (only applied when className is nginx)
+  nginxAnnotations:
+    # Rewrite target path (e.g., "/$2" to strip prefix)
+    # rewriteTarget: ""
+    # Force SSL redirect
+    # sslRedirect: "true"
+    # Backend protocol (HTTP, HTTPS, GRPC, GRPCS, AJP, FCGI)
+    # backendProtocol: "HTTP"
+    # Enable CORS
+    # corsEnabled: "true"
+    # Use regex in paths
+    # useRegex: "true"
+    # Custom Nginx annotations
+    custom: {}
+      # nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+      # nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+  
+  # Kong-specific annotations (only applied when className is kong)
+  kongAnnotations:
+    # Strip path before forwarding to service
+    # stripPath: "true"
+    # Preserve host header
+    # preserveHost: "true"
+    # HTTPS redirect status code
+    # httpsRedirectStatusCode: "301"
+    # Protocols (http, https, grpc, grpcs, tcp, tls, udp)
+    # protocols: "https"
+    # HTTP methods (GET, POST, etc.)
+    # methods: "GET,POST"
+    # Custom Kong annotations
+    custom: {}
+      # konghq.com/request-buffering: "true"
+      # konghq.com/response-buffering: "true"
+  
+  # TLS configuration
+  tls:
+    enabled: false
+    # secretName: example-tls
+    # hosts:
+    #   - example.com
+  
+  # Ingress rules
+  rules: []
+    # - host: example.com
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+    #       # Service configuration
+    #       service:
+    #         # Service name (defaults to fullname if not specified)
+    #         name: ""
+    #         # Service port (number or name)
+    #         port: http
+  
+  # Access Control List (IP whitelisting)
+  # For Nginx: uses whitelist-source-range annotation
+  # For Kong: creates KongPlugin with ip-restriction
+  acl:
+    enabled: false
+    # Comma-separated list of allowed IP addresses or CIDR ranges
+    # whitelistSourceRange: "10.0.0.0/8,192.168.1.0/24,1.2.3.4/32"
+  
+  # HTTP Basic Authentication
+  # For Nginx: uses auth-type, auth-secret, and auth-realm annotations
+  # For Kong: creates KongPlugin with basic-auth
+  basicAuth:
+    enabled: false
+    # Name of the secret containing auth credentials
+    # For Nginx: secret must contain htpasswd format data
+    # For Kong: secret must contain basic-auth credentials
+    # secretName: example-basic-auth
+    # Authentication realm message (Nginx only)
+    # authRealm: "Authentication Required"
+    # Hide credentials from upstream service (Kong only)
+    # hideCredentials: true
+    # Anonymous consumer for unauthenticated requests (Kong only)
+    # anonymousConsumer: ""
+  
+  # Nginx Ingress with multiple resources support
+  # Each resource creates a separate Ingress with its own configuration
+  nginx:
+    enabled: false
+    # Default IngressClass for all nginx ingresses (can be overridden per resource)
+    defaultIngressClass: nginx
+    # List of Ingress resources to create
+    # Each resource can have the following fields:
+    #   - name: (required) Name of the Ingress resource
+    #   - ingressClassName: (optional) IngressClass name, uses defaultIngressClass if not specified
+    #   - labels: (optional) Additional labels for the Ingress resource
+    #   - annotations: (optional) Additional annotations for the Ingress
+    #   - nginxAnnotations: (optional) Nginx-specific annotations
+    #     - rewriteTarget: (optional) Rewrite target path
+    #     - sslRedirect: (optional) Force SSL redirect
+    #     - forceSslRedirect: (optional) Force SSL redirect even without TLS section
+    #     - backendProtocol: (optional) Backend protocol (HTTP, HTTPS, GRPC, etc.)
+    #     - corsEnabled: (optional) Enable CORS
+    #     - useRegex: (optional) Use regex in paths
+    #     - custom: (optional) Map of custom Nginx annotations
+    #   - tls: (optional) TLS configuration
+    #     - enabled: (required if tls is set) Enable TLS
+    #     - secretName: (required if enabled) Name of the TLS secret
+    #     - hosts: (optional) List of hosts for TLS certificate
+    #   - rules: (required) List of ingress rules
+    #     - host: (required) Hostname for the rule
+    #     - paths: (required) List of paths
+    #       - path: (required) URL path
+    #       - pathType: (optional) Path type (Prefix, Exact, ImplementationSpecific), default: Prefix
+    #       - service: (required) Backend service configuration
+    #         - name: (optional) Service name (defaults to chart fullname)
+    #         - port: (required) Service port number or name
+    #   - acl: (optional) Access Control List configuration
+    #     - enabled: (required if acl is set) Enable ACL/IP whitelisting
+    #     - whitelistSourceRange: (required if enabled) IP addresses or CIDR ranges (comma-separated)
+    #   - basicAuth: (optional) HTTP Basic Authentication configuration
+    #     - enabled: (required if basicAuth is set) Enable HTTP Basic Auth
+    #     - secretName: (required if enabled) Name of the secret containing auth credentials (htpasswd format)
+    #     - authRealm: (optional) Authentication realm message
+    resources: []
+    # Examples:
+    #   - name: public-api
+    #     rules:
+    #       - host: example.com
+    #         paths:
+    #           - path: /api/public
+    #             pathType: Prefix
+    #             service:
+    #               port: http
+    #   - name: admin-api
+    #     basicAuth:
+    #       enabled: true
+    #       secretName: admin-basic-auth
+    #       authRealm: "Admin Area"
+    #     acl:
+    #       enabled: true
+    #       whitelistSourceRange: "10.0.0.0/8,192.168.1.0/24"
+    #     rules:
+    #       - host: example.com
+    #         paths:
+    #           - path: /admin
+    #             pathType: Prefix
+    #             service:
+    #               port: http
+
+# Jobs configuration - one-time tasks (e.g., migrations)
+# Supports ArgoCD hooks (PreSync/PostSync/Sync) for controlled execution
+# Jobs inherit image, secrets, envFrom, and volumes from main deployment
+jobs:
+  enabled: false
+  # List of Job resources to create
+  resources: []
+    # Example 1: Database migration with ArgoCD PreSync hook
+    # - name: migration
+    #   # No image field - will use main container image:tag
+    #   command: ["./migrate.sh"]
+    #   args: ["--verbose"]
+    #   backoffLimit: 2  # Retry up to 2 times on failure (default: 2)
+    #   activeDeadlineSeconds: 600  # Timeout after 10 minutes
+    #   ttlSecondsAfterFinished: 300  # Auto-cleanup after 5 minutes
+    #   restartPolicy: OnFailure  # OnFailure or Never (default: OnFailure)
+    #   # ArgoCD hook configuration
+    #   argocd:
+    #     hook: PreSync  # Run before main deployment (PreSync/Sync/PostSync)
+    #     hookDeletePolicy: HookSucceeded,BeforeHookCreation  # Cleanup policy
+    #     syncWave: 0  # Order of execution (lower runs first)
+    #   # Environment variables (merged with main deployment env)
+    #   env:
+    #     MIGRATION_MODE: "up"
+    #   # Raw environment variables
+    #   envRaw:
+    #     - name: POD_NAME
+    #       valueFrom:
+    #         fieldRef:
+    #           fieldPath: metadata.name
+    #   # Resources for the job
+    #   resources:
+    #     requests:
+    #       cpu: "100m"
+    #       memory: "128Mi"
+    #     limits:
+    #       cpu: "500m"
+    #       memory: "512Mi"
+    #   # Labels and annotations
+    #   labels: {}
+    #   annotations: {}
+    #   podLabels: {}
+    #   podAnnotations: {}
+    #
+    # Example 2: Custom job with specific image
+    # - name: data-import
+    #   image: docker.io/company/data-importer:v1.0.0
+    #   command: ["./import.sh"]
+    #   backoffLimit: 3
+    #   ttlSecondsAfterFinished: 600
+    #   argocd:
+    #     hook: PostSync
+    #     hookDeletePolicy: HookSucceeded
+    #   resources:
+    #     requests:
+    #       cpu: "200m"
+    #       memory: "256Mi"
+    #
+    # Example 3: Job without ArgoCD hooks (regular Kubernetes Job)
+    # - name: cleanup
+    #   command: ["./cleanup.sh"]
+    #   backoffLimit: 1
+    #   ttlSecondsAfterFinished: 86400  # Keep for 24 hours
+    #
+    # Example 4: Migration with Vault secrets (wait for VaultStaticSecret operator)
+    # Note: VaultStaticSecret should have argocd.argoproj.io/sync-wave: "-5" annotation
+    # - name: migration
+    #   command: ["/bin/sh", "-c"]
+    #   args:
+    #     - |
+    #       echo "Waiting for Vault operator to create secrets..."
+    #       sleep 15
+    #       ./migrate.sh
+    #   argocd:
+    #     hook: PreSync
+    #     hookDeletePolicy: HookSucceeded,BeforeHookCreation
+    #     syncWave: 0  # VaultStaticSecret with syncWave: -5 will be created first
+
+# CronJobs configuration - scheduled tasks
+# CronJobs inherit image, secrets, envFrom, and volumes from main deployment
+cronjobs:
+  enabled: false
+  # List of CronJob resources to create
+  resources: []
+    # Example 1: Daily cleanup at 2 AM
+    # - name: daily-cleanup
+    #   schedule: "0 2 * * *"  # Cron schedule (required)
+    #   timeZone: "UTC"  # Timezone for schedule (optional)
+    #   # No image field - will use main container image:tag
+    #   command: ["./cleanup.sh"]
+    #   args: ["--days", "30"]
+    #   suspend: false  # Set to true to suspend cron execution
+    #   concurrencyPolicy: Forbid  # Allow/Forbid/Replace (default: Allow)
+    #   successfulJobsHistoryLimit: 3  # Keep last 3 successful jobs
+    #   failedJobsHistoryLimit: 1  # Keep last failed job
+    #   startingDeadlineSeconds: 300  # Start within 5 minutes or skip
+    #   backoffLimit: 2  # Retry up to 2 times on failure
+    #   activeDeadlineSeconds: 3600  # Timeout after 1 hour
+    #   ttlSecondsAfterFinished: 86400  # Auto-cleanup after 24 hours
+    #   restartPolicy: OnFailure  # OnFailure or Never (default: OnFailure)
+    #   # Environment variables (merged with main deployment env)
+    #   env:
+    #     CLEANUP_MODE: "soft"
+    #   # Resources for the job
+    #   resources:
+    #     requests:
+    #       cpu: "50m"
+    #       memory: "64Mi"
+    #     limits:
+    #       cpu: "200m"
+    #       memory: "256Mi"
+    #   # Labels and annotations
+    #   labels: {}
+    #   annotations: {}
+    #   jobLabels: {}
+    #   jobAnnotations: {}
+    #   podLabels: {}
+    #   podAnnotations: {}
+    #
+    # Example 2: Hourly data sync
+    # - name: data-sync
+    #   schedule: "0 * * * *"
+    #   command: ["./sync.sh"]
+    #   concurrencyPolicy: Forbid  # Don't allow overlapping executions
+    #   successfulJobsHistoryLimit: 5
+    #   backoffLimit: 3
+    #   resources:
+    #     requests:
+    #       cpu: "100m"
+    #       memory: "128Mi"
+    #
+    # Example 3: Weekly report generation
+    # - name: weekly-report
+    #   schedule: "0 0 * * 0"  # Every Sunday at midnight
+    #   timeZone: "America/New_York"
+    #   image: docker.io/company/report-generator
+    #   command: ["./generate-report.sh"]
+    #   args: ["--format", "pdf"]
+    #   successfulJobsHistoryLimit: 10
+    #   backoffLimit: 1

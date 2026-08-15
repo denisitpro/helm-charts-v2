@@ -1,0 +1,78 @@
+## @section Global parameters
+## Global Docker image parameters
+##
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+## @section Common Names
+##
+name: ""
+namespaceOverride: ""
+
+## @section Common parameters
+## Flyway image parameters
+##
+flywayImage:
+  registry: docker.io
+  repository: flyway/flyway
+  tag: 11.8.1
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+postgresql:
+  registry: docker.io
+  repository: bitnami/postgresql
+  tag: 17.5.0-debian-12-r4
+  pullPolicy: IfNotPresent
+
+gitImage:
+  registry: docker.io
+  repository: alpine/git
+  tag: v2.47.2
+  pullPolicy: IfNotPresent
+
+## @section Flyway migration settings
+##
+migrations:
+  enabled: true
+  migration_path: migrations
+  git:
+    host: git.example.com
+    username: git_username
+    repository: /project/app.git
+    ref: master
+  ## Additional arguments for flyway
+  extraArgs: []
+  ## Init containers to run before migration
+  initContainers: []
+  ## Extra environment variables
+  extraEnvVars: []
+## @section Job control
+  ttlSecondsAfterFinished: 86400
+
+## @section Database connection parameters
+##
+db:
+  host: postgres
+  port: 5432
+  dbName: db1
+  user: postgres
+  password: "set_me"
+
+## @section Resource parameters
+##
+resources:
+  limits: {}
+  requests: {}
+
+## @section Pod security context
+##
+#podSecurityContext:
+#  enabled: true
+#  fsGroup: 1001
+#
+#containerSecurityContext:
+#  enabled: true
+#  runAsUser: 1001

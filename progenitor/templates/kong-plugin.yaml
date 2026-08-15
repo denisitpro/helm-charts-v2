@@ -1,0 +1,38 @@
+{{- if and .Values.ingress.enabled (eq .Values.ingress.className "kong") .Values.ingress.acl.enabled -}}
+{{- $fullName := include "progenitor.fullname" . -}}
+{{- $ingressName := .Values.ingress.name | default $fullName -}}
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: {{ $ingressName }}-ip-restriction
+  labels:
+    {{- include "progenitor.labels" . | nindent 4 }}
+plugin: ip-restriction
+config:
+  allow:
+  {{- range splitList "," .Values.ingress.acl.whitelistSourceRange }}
+    - {{ . | trim | quote }}
+  {{- end }}
+{{- end }}
+{{- if and .Values.ingress.enabled (eq .Values.ingress.className "kong") .Values.ingress.basicAuth.enabled -}}
+{{- $fullName := include "progenitor.fullname" . -}}
+{{- $ingressName := .Values.ingress.name | default $fullName -}}
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: {{ $ingressName }}-basic-auth
+  labels:
+    {{- include "progenitor.labels" . | nindent 4 }}
+plugin: basic-auth
+config:
+  {{- if hasKey .Values.ingress.basicAuth "hideCredentials" }}
+  hide_credentials: {{ .Values.ingress.basicAuth.hideCredentials }}
+  {{- else }}
+  hide_credentials: true
+  {{- end }}
+  {{- if .Values.ingress.basicAuth.anonymousConsumer }}
+  anonymous: {{ .Values.ingress.basicAuth.anonymousConsumer | quote }}
+  {{- end }}
+{{- end }}
