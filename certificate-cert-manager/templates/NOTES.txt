@@ -1,0 +1,9 @@
+A certificate resource has been created by this chart.
+
+Certificate name: {{ .Values.name | default (printf "%s-cert" .Release.Name) }}
+Secret name: {{ .Values.certificate.secretName }}
+Namespace: {{ .Values.namespaceOverride | default .Release.Namespace }}
+
+To check the status of the certificate:
+
+  kubectl describe certificate {{ .Values.name | default (printf "%s-cert" .Release.Name) }} -n {{ .Values.namespaceOverride | default .Release.Namespace }}

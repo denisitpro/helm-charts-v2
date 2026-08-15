@@ -1,0 +1,30 @@
+## @section Global parameters
+## Global Docker image parameters
+##
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+## @section Common Names
+##
+name: ""
+namespaceOverride: ""
+
+labels:
+  app.kubernetes.io/name: "cert-createre"
+  app.kubernetes.io/instance: "cert-createre"
+
+certificate:
+  enabled: true
+  secretName: "secret-tls"
+
+  issuerRef:
+    name: "cloudflare-issuer-dns-challenge"
+    kind: "ClusterIssuer"
+
+  dnsNames:
+    - "domain.example.com"
+  privateKey:
+    algorithm: "ECDSA"
+    size: 256

@@ -1,0 +1,22 @@
+{{- if .Values.configMaps.files.enabled -}}
+{{- range .Values.configMaps.files.resources }}
+{{- if .data }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "progenitor.labels" $ | nindent 4 }}
+  {{- with .labels }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+{{- range $filename, $content := .data }}
+  {{ $filename }}: |
+{{ $content | nindent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

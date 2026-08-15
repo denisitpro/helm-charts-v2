@@ -1,0 +1,50 @@
+{{- if .Values.servicesExternal.enabled }}
+{{- $fullName := include "progenitor.fullname" . -}}
+{{- range .Values.servicesExternal.resources }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullName }}-{{ .name }}-external
+  labels:
+    {{- include "progenitor.labels" $ | nindent 4 }}
+  {{- with .labels }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .annotations }}
+  annotations:
+    {{- tpl (toYaml .) $ | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .type | default "ClusterIP" }}
+  {{- if and (eq (.type | default "ClusterIP") "ExternalName") .externalName }}
+  externalName: {{ .externalName }}
+  {{- end }}
+  {{- if and (ne (.type | default "ClusterIP") "ExternalName") .clusterIP }}
+  clusterIP: {{ .clusterIP }}
+  {{- end }}
+  {{- if .externalIPs }}
+  externalIPs:
+    {{- toYaml .externalIPs | nindent 4 }}
+  {{- end }}
+  {{- if ne (.type | default "ClusterIP") "ExternalName" }}
+  ports:
+    {{- toYaml .ports | nindent 4 }}
+  {{- end }}
+  {{- if not .noSelector }}
+  selector:
+    {{- include "progenitor.selectorLabels" $ | nindent 4 }}
+  {{- end }}
+{{- if and .endpoints .endpoints.enabled .endpoints.subsets }}
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: {{ $fullName }}-{{ .name }}-external
+  labels:
+    {{- include "progenitor.labels" $ | nindent 4 }}
+subsets:
+  {{- toYaml .endpoints.subsets | nindent 2 }}
+{{- end }}
+{{- end }}
+{{- end }}

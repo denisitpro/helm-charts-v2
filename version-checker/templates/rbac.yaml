@@ -1,0 +1,31 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "common.names.serviceAccountName" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 6 }}
+{{- end }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "common.names.fullname" . }}-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "common.names.fullname" . }}-binding
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "common.names.serviceAccountName" . }}
+roleRef:
+  kind: Role
+  name: {{ include "common.names.fullname" . }}-role
+  apiGroup: rbac.authorization.k8s.io

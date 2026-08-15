@@ -1,0 +1,53 @@
+name: publish certificate-cert-manager
+
+on:
+  push:
+    paths:
+#      - '**/*'  # only debug
+      - certificate-cert-manager/Chart.yaml
+
+jobs:
+  publish:
+    container:
+      image: denisitpro/net-tools:latest
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        ci_cd_folder: ['certificate-cert-manager']
+
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract chart version
+        id: vars
+        run: |
+          cd ${{ matrix.ci_cd_folder }}
+          echo "CHART_VERSION=$(yq e '.version' Chart.yaml)" >> $GITHUB_ENV
+          echo "TIMESTAMP=$(date -u +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+          echo "CHART_VERSION=$(yq e '.version' Chart.yaml)"
+
+      - name: Package Helm chart
+        run: |
+          helm package ${{ matrix.ci_cd_folder }} --destination .
+          ls -la
+
+      - name: Login to Helm OCI registry
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin registry-1.docker.io
+
+      - name: Push Helm chart to OCI
+        run: |
+          ls -la
+          helm push certificate-cert-manager-${CHART_VERSION}.tgz oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "certificate-cert-manager-${{ env.CHART_VERSION }}"
+          name: "certificate-cert-manager ${{ env.CHART_VERSION }}"
+          files: "certificate-cert-manager-${{ env.CHART_VERSION }}.tgz"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

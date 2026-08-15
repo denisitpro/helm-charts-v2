@@ -1,0 +1,9 @@
+Flyway migration job has been created.
+
+Components used:
+  - Flyway image: {{ .Values.flywayImage.repository }}:{{ .Values.flywayImage.tag }}
+  - PostgreSQL client image: {{ .Values.postgresql.repository }}:{{ .Values.postgresql.tag }}
+  - Git image: {{ .Values.gitImage.repository }}:{{ .Values.gitImage.tag }}
+
+Check job logs with:
+  kubectl logs -n {{ .Release.Namespace }} job/{{ include "pg-flyway-migrate.fullname" . }}

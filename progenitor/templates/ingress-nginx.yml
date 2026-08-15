@@ -1,0 +1,93 @@
+{{- if .Values.ingress.nginx.enabled -}}
+{{- $fullName := include "progenitor.fullname" . -}}
+{{- range .Values.ingress.nginx.resources }}
+{{- $ingressClass := .ingressClassName | default $.Values.ingress.nginx.defaultIngressClass }}
+{{- if eq $ingressClass "nginx" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "progenitor.labels" $ | nindent 4 }}
+  {{- with .labels }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  annotations:
+  {{- with .annotations }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
+  {{- end }}
+  {{- if .nginxAnnotations }}
+    {{- if .nginxAnnotations.rewriteTarget }}
+    nginx.ingress.kubernetes.io/rewrite-target: {{ .nginxAnnotations.rewriteTarget | quote }}
+    {{- end }}
+    {{- if .nginxAnnotations.sslRedirect }}
+    nginx.ingress.kubernetes.io/ssl-redirect: {{ .nginxAnnotations.sslRedirect | quote }}
+    {{- end }}
+    {{- if .nginxAnnotations.forceSslRedirect }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: {{ .nginxAnnotations.forceSslRedirect | quote }}
+    {{- end }}
+    {{- if .nginxAnnotations.backendProtocol }}
+    nginx.ingress.kubernetes.io/backend-protocol: {{ .nginxAnnotations.backendProtocol | quote }}
+    {{- end }}
+    {{- if .nginxAnnotations.corsEnabled }}
+    nginx.ingress.kubernetes.io/enable-cors: {{ .nginxAnnotations.corsEnabled | quote }}
+    {{- end }}
+    {{- if .nginxAnnotations.useRegex }}
+    nginx.ingress.kubernetes.io/use-regex: {{ .nginxAnnotations.useRegex | quote }}
+    {{- end }}
+    {{- with .nginxAnnotations.custom }}
+      {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- end }}
+  {{- end }}
+  {{- if .acl }}
+    {{- if .acl.enabled }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ .acl.whitelistSourceRange | quote }}
+    {{- end }}
+  {{- end }}
+  {{- if .basicAuth }}
+    {{- if .basicAuth.enabled }}
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: {{ .basicAuth.secretName | quote }}
+    {{- if .basicAuth.authRealm }}
+    nginx.ingress.kubernetes.io/auth-realm: {{ .basicAuth.authRealm | quote }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
+spec:
+  ingressClassName: nginx
+{{- if .tls }}
+  {{- if .tls.enabled }}
+  tls:
+    - secretName: {{ .tls.secretName }}
+    {{- if .tls.hosts }}
+      hosts:
+      {{- range .tls.hosts }}
+        - {{ . | quote }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+  rules:
+  {{- range .rules }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+        {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ .service.name | default $fullName }}
+                port:
+                  {{- if kindIs "string" .service.port }}
+                  name: {{ .service.port }}
+                  {{- else }}
+                  number: {{ .service.port }}
+                  {{- end }}
+        {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

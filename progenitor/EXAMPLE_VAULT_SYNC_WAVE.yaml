@@ -1,0 +1,55 @@
+# Example configuration: VaultStaticSecret with sync-wave and Job with delay
+# This ensures Vault operator creates secrets before migration job runs
+
+# Enable VaultStaticSecret
+vaultStaticSecrets:
+  enabled: true
+  
+  # Add ArgoCD sync-wave annotation to create secrets early
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+  
+  # Define secrets
+  secrets:
+    - secretName: app-database-credentials
+      path: dev1/myapp/database
+      mount: secret
+      type: kv-v2
+
+# Enable Jobs
+jobs:
+  enabled: true
+  
+  # Migration job that waits for Vault secrets
+  resources:
+    - name: migration
+      # Use main container image
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "Waiting for Vault operator to create secrets..."
+          sleep 15
+          ./migrate.sh
+      
+      # ArgoCD hook configuration
+      argocd:
+        hook: PreSync
+        hookDeletePolicy: HookSucceeded,BeforeHookCreation
+        syncWave: 0  # VaultStaticSecret with syncWave: -5 runs first
+      
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 300
+      
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+
+# Why this works:
+# 1. VaultStaticSecret has sync-wave: -5 (creates first)
+# 2. Migration Job has sync-wave: 0 (creates after)
+# 3. Difference: 5 waves + sleep 15s = ~20-30 seconds for Vault operator
+# 4. In 90% cases this is enough time for secret creation

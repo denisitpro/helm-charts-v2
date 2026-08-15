@@ -1,0 +1,49 @@
+{{- if .Values.cronjob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "common.names.name" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.cronjob.schedule | quote }}
+  concurrencyPolicy: {{ .Values.cronjob.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ .Values.cronjob.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.cronjob.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: {{ .Values.cronjob.ttlSecondsAfterFinished }}
+      template:
+        metadata:
+          labels:
+            {{- include "common.labels.standard" . | nindent 12 }}
+        spec:
+          serviceAccountName: {{ include "common.names.serviceAccountName" . }}
+          containers:
+            - name: reporter
+              image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  export CLUSTER="{{ .Values.clusterName }}"
+                  export NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+                  echo "Cluster: $CLUSTER, Namespace: $NAMESPACE"
+                  kubectl get pods -n $NAMESPACE -o json | jq -r '
+                    .items[]
+                    | [
+                        .metadata.namespace,
+                        (.metadata.labels["app.kubernetes.io/name"] // "unknown"),
+                        .metadata.name,
+                        (.spec.containers[0].image | if contains(":") then split(":")[0] else . end),
+                        (.spec.containers[0].image | if contains(":") then split(":")[1] else "latest" end)
+                      ]
+                    | @tsv
+                  ' | while IFS=$'\t' read -r ns appname pod_name reg ver; do
+                    cluster="$CLUSTER"
+                    printf "INSERT INTO infra.k8s_versions (cluster, namespace, appname, pod_name, registry_path, version) FORMAT Values\n('%s','%s','%s','%s','%s','%s')\n" "$cluster" "$ns" "$appname" "$pod_name" "$reg" "$ver" | \
+                    curl --silent --show-error -X POST --data-binary @- \
+                      "{{ .Values.cronjob.clickhouseUrl }}"
+                  done
+          restartPolicy: OnFailure
+{{- end }}

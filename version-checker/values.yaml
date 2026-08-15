@@ -1,0 +1,32 @@
+## @section Global parameters
+## Global Docker image parameters
+##
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+## @section Common Names
+##
+name: ""
+namespaceOverride: ""
+
+cronjob:
+  enabled: true
+  schedule: "*/5 * * * *"
+  ttlSecondsAfterFinished: 120
+  clickhouseUrl: "https://user:pass@click.example.com?async_insert=1&amp;wait_for_async_insert=0&amp;async_insert_busy_timeout_max_ms=1000"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+image:
+  registry: docker.io
+  repository: denisitpro/net-tools
+  tag: "1.6"
+
+clusterName: cluster-name
+
+serviceAccount:
+  create: true
+  name: "pod-version-reader"
