@@ -1,0 +1,11 @@
+.ssh/
+.bash_history
+.ansible
+*.retry
+*.idea
+.DS_Store
+*.log
+*.tgz
+override.yml
+value.yaml
+value.yml
